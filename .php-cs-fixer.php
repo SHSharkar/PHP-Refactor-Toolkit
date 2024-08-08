@@ -1,22 +1,30 @@
 <?php
 
-$finder = Symfony\Component\Finder\Finder::create()
+use PhpCsFixer\Config;
+use Symfony\Component\Finder\Finder;
+
+$finder = Finder::create()
     ->in(__DIR__)
     ->name('*.php')
     ->ignoreDotFiles(true)
     ->ignoreVCS(true)
-    ->exclude(['vendor', 'node_modules', 'storage/logs', 'storage/framework', 'storage/debugbar', 'public', 'bootstrap/cache']);
+    ->exclude(
+        ['vendor', 'node_modules', 'storage/logs', 'storage/framework', 'storage/debugbar', 'public', 'bootstrap/cache']
+    );
 
-return (new PhpCsFixer\Config())
+return (new Config)
     ->setRules([
-        '@PHP80Migration' => true,
         '@PHP80Migration:risky' => true,
+        '@PHP80Migration' => true,
         '@PHP81Migration' => true,
-        '@PSR12:risky' => true,
-        '@PSR2' => true,
-        '@PhpCsFixer' => true,
+        '@PHP82Migration' => true,
+        '@PHP83Migration' => true,
         '@PhpCsFixer:risky' => true,
+        '@PhpCsFixer' => true,
+        '@PSR2' => true,
+        '@PSR12:risky' => true,
         '@Symfony:risky' => true,
+        '@Symfony' => true,
         'declare_strict_types' => false,
         'blank_line_before_statement' => [
             'statements' => [
@@ -54,9 +62,15 @@ return (new PhpCsFixer\Config())
         'phpdoc_align' => [
             'align' => 'left',
         ],
-        'single_quote' => ['strings_containing_single_quote_chars' => true],
-        'space_after_semicolon' => ['remove_in_empty_for_expressions' => true],
-        'whitespace_after_comma_in_array' => ['ensure_single_space' => true],
+        'single_quote' => [
+            'strings_containing_single_quote_chars' => true,
+        ],
+        'space_after_semicolon' => [
+            'remove_in_empty_for_expressions' => true,
+        ],
+        'whitespace_after_comma_in_array' => [
+            'ensure_single_space' => true,
+        ],
         'ordered_imports' => [
             'imports_order' => ['const', 'class', 'function'],
         ],

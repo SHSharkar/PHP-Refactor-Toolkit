@@ -35,14 +35,17 @@ install() {
     read -p "Do you want to use .zshrc or .bashrc? (default is .zshrc): " shell_rc
     shell_rc=${shell_rc:-.zshrc}
 
-    if ! grep -q "$BIN_DIR" <<<"$PATH"; then
+    if ! grep -q "export PATH=\$HOME/bin:\$PATH" ~/"$shell_rc"; then
         echo "export PATH=\$HOME/bin:\$PATH" >>~/"$shell_rc"
         source ~/"$shell_rc"
+        log "Added \$HOME/bin to your PATH in ~/$shell_rc"
+    else
+        log "\$HOME/bin is already in your PATH in ~/$shell_rc"
     fi
 
-    log "Script has been installed successfully. You can run the toolkit using 'php_refactor_toolkit'."
-    log "Running the toolkit now..."
-    $SCRIPT_PATH
+    log "Script has been installed successfully."
+    log "To run the toolkit, please execute the following command:"
+    log "${GREEN}php_refactor_toolkit${NC}"
 }
 
 install

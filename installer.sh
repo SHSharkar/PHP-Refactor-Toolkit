@@ -18,8 +18,8 @@ log() {
 }
 
 install() {
-    if [ -d "$INSTALLER_DIR" ] && [ "$(ls -A $INSTALLER_DIR)" ]; then
-        log "${YELLOW}Directory $INSTALLER_DIR already exists and is not empty. Removing it...${NC}"
+    if [ -d "$INSTALLER_DIR" ]; then
+        log "${YELLOW}Directory $INSTALLER_DIR already exists. Removing it...${NC}"
         rm -rf "$INSTALLER_DIR"
     fi
 

@@ -18,6 +18,11 @@ log() {
 }
 
 install() {
+    if [ -d "$INSTALLER_DIR" ] && [ "$(ls -A $INSTALLER_DIR)" ]; then
+        log "${YELLOW}Directory $INSTALLER_DIR already exists and is not empty. Removing it...${NC}"
+        rm -rf "$INSTALLER_DIR"
+    fi
+
     log "Cloning repository..."
     git clone "$REPO_URL" "$INSTALLER_DIR"
 
@@ -34,6 +39,13 @@ install() {
 
     read -p "Do you want to use .zshrc or .bashrc? (default is .zshrc): " shell_rc
     shell_rc=${shell_rc:-.zshrc}
+
+    if [ "$shell_rc" == ".zshrc" ]; then
+        if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+            log "${RED}Oh My Zsh is not installed. Please install it or choose .bashrc.${NC}"
+            return
+        fi
+    fi
 
     if ! grep -q "export PATH=\$HOME/bin:\$PATH" ~/"$shell_rc"; then
         echo "export PATH=\$HOME/bin:\$PATH" >>~/"$shell_rc"

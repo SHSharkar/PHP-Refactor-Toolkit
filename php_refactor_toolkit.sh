@@ -127,7 +127,11 @@ validate_and_refactor() {
 
     if [ -f "$path_input" ] && [ "${path_input##*.}" == "php" ]; then
         log_message "${GREEN}Valid PHP file detected: $path_input${NC}"
-        run_refactoring_tool "$tool_name" "$tool_config" "$path_input"
+        if [[ "$tool_name" == "apply_all" ]]; then
+            apply_all_refactoring_tools "$path_input"
+        else
+            run_refactoring_tool "$tool_name" "$tool_config" "$path_input"
+        fi
     elif [ -d "$path_input" ]; then
         log_message "${GREEN}Directory detected: $path_input${NC}"
         refactor_directory "$path_input" "$tool_name" "$tool_config"

@@ -20,88 +20,149 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-log() {
+log_message() {
     echo -e "$(date '+%Y-%m-%d %H:%M:%S') - ${BOLD}$1${NC}"
 }
 
-install_dependency() {
+install_global_dependency() {
     local package="$1"
     if ! composer global show | grep -q "$package"; then
-        log "${YELLOW}$package not found, installing globally...${NC}"
+        log_message "${YELLOW}$package not found, installing globally...${NC}"
         composer global require "$package"
     else
-        log "${GREEN}$package is already installed.${NC}"
+        log_message "${GREEN}$package is already installed.${NC}"
     fi
 }
 
-install_dependencies() {
-    install_dependency "rector/rector"
-    install_dependency "symplify/easy-coding-standard"
-    install_dependency "friendsofphp/php-cs-fixer"
-    install_dependency "laravel/pint"
+ensure_dependencies_installed() {
+    install_global_dependency "rector/rector"
+    install_global_dependency "symplify/easy-coding-standard"
+    install_global_dependency "friendsofphp/php-cs-fixer"
+    install_global_dependency "laravel/pint"
 }
 
-verify_installed() {
-    local tool="$1"
-    local binary="$COMPOSER_BIN_DIR/$tool"
-    if [ ! -f "$binary" ]; then
-        log "${RED}$tool not found in $COMPOSER_BIN_DIR. Please ensure it is installed correctly.${NC}"
+verify_tool_installed() {
+    local tool_name="$1"
+    local tool_binary="$COMPOSER_BIN_DIR/$tool_name"
+    if [ ! -f "$tool_binary" ]; then
+        log_message "${RED}$tool_name not found in $COMPOSER_BIN_DIR. Please ensure it is installed correctly.${NC}"
         return 1
     fi
     return 0
 }
 
-refactor_with_tool() {
-    local tool="$1"
-    local config="$2"
-    local file_path="$3"
+run_refactoring_tool() {
+    local tool_name="$1"
+    local tool_config="$2"
+    local target_path="$3"
     local command=""
+    local start_time end_time elapsed_time
 
-    log "Refactoring $file_path with $tool..."
+    start_time=$(date +%s)
 
-    case "$tool" in
+    log_message "Starting refactoring of $target_path with $tool_name..."
+
+    case "$tool_name" in
     "rector")
-        command="$COMPOSER_BIN_DIR/rector process \"$file_path\" --config \"$config\""
+        command="$COMPOSER_BIN_DIR/rector process \"$target_path\" --config \"$tool_config\" --no-progress-bar"
         ;;
     "ecs")
-        command="$COMPOSER_BIN_DIR/ecs check \"$file_path\" --fix --config \"$config\""
+        command="$COMPOSER_BIN_DIR/ecs check \"$target_path\" --fix --config \"$tool_config\" --output-format=console"
         ;;
     "php-cs-fixer")
-        command="$COMPOSER_BIN_DIR/php-cs-fixer fix \"$file_path\" --config=\"$config\""
+        command="$COMPOSER_BIN_DIR/php-cs-fixer fix \"$target_path\" --config=\"$tool_config\" --no-interaction"
         ;;
     "pint")
-        command="$COMPOSER_BIN_DIR/pint --preset laravel \"$file_path\""
+        command="$COMPOSER_BIN_DIR/pint \"$target_path\""
         ;;
     esac
 
-    eval $command 2>&1
+    eval $command
+
+    end_time=$(date +%s)
+    elapsed_time=$((end_time - start_time))
 
     if [ $? -eq 0 ]; then
-        log "${GREEN}$file_path has been refactored successfully using $tool.${NC}"
+        log_message "${GREEN}$tool_name successfully refactored $target_path in $elapsed_time seconds.${NC}"
     else
-        log "${RED}An error occurred while refactoring $file_path with $tool. Check the detailed error message above.${NC}"
+        log_message "${RED}$tool_name encountered an error while refactoring $target_path. Please check logs for details.${NC}"
     fi
 }
 
-apply_all_tools() {
-    local file_path="$1"
-    refactor_with_tool "rector" "$RECTOR_CONFIG" "$file_path"
-    refactor_with_tool "ecs" "$ECS_CONFIG" "$file_path"
-    refactor_with_tool "php-cs-fixer" "$PHPCS_FIXER_CONFIG" "$file_path"
-    refactor_with_tool "pint" "$PINT_CONFIG" "$file_path"
+apply_all_refactoring_tools() {
+    local target_path="$1"
+    run_refactoring_tool "rector" "$RECTOR_CONFIG" "$target_path"
+    run_refactoring_tool "ecs" "$ECS_CONFIG" "$target_path"
+    run_refactoring_tool "php-cs-fixer" "$PHPCS_FIXER_CONFIG" "$target_path"
+    run_refactoring_tool "pint" "$PINT_CONFIG" "$target_path"
 }
 
-menu() {
+refactor_directory() {
+    local directory_path="$1"
+    local tool_name="$2"
+    local tool_config="$3"
+
+    local php_files_count=$(find "$directory_path" -type f -name "*.php" -not -path "*/vendor/*" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/cache/*" -not -path "*/build/*" -not -path "*/dist/*" -not -path "*/logs/*" -not -path "*/public/*" -not -path "*/assets/*" | wc -l)
+
+    if [ "$php_files_count" -eq 0 ]; then
+        log_message "${RED}No PHP files found in the directory: $directory_path${NC}"
+        return 1
+    fi
+
+    log_message "Found $php_files_count PHP files in $directory_path. Starting refactoring..."
+
+    find "$directory_path" -type f -name "*.php" -not -path "*/vendor/*" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/cache/*" -not -path "*/build/*" -not -path "*/dist/*" -not -path "*/logs/*" -not -path "*/public/*" -not -path "*/assets/*" | while read -r php_file; do
+        if [ "$tool_name" == "apply_all" ]; then
+            apply_all_refactoring_tools "$php_file"
+        else
+            run_refactoring_tool "$tool_name" "$tool_config" "$php_file"
+        fi
+    done
+}
+
+validate_and_refactor() {
+    local path_input="$1"
+    local tool_name="$2"
+    local tool_config="$3"
+
+    if [ -f "$path_input" ] && [ "${path_input##*.}" == "php" ]; then
+        log_message "${GREEN}Valid PHP file detected: $path_input${NC}"
+        run_refactoring_tool "$tool_name" "$tool_config" "$path_input"
+    elif [ -d "$path_input" ]; then
+        log_message "${GREEN}Directory detected: $path_input${NC}"
+        refactor_directory "$path_input" "$tool_name" "$tool_config"
+    else
+        log_message "${RED}Invalid input. Please provide a valid PHP file or directory.${NC}"
+        return 1
+    fi
+    return 0
+}
+
+show_main_menu() {
     echo "Select an option:"
+    echo "1) Refactor a PHP file"
+    echo "2) Refactor all PHP files in a directory"
+    echo "3) Quit"
+}
+
+show_tool_selection_menu() {
+    echo "Select a refactoring tool:"
     echo "1) Refactor with RectorPHP"
     echo "2) Refactor with Easy Coding Standard"
     echo "3) Refactor with PHP CS Fixer"
     echo "4) Refactor with Laravel Pint"
     echo "5) Apply All"
-    echo "6) Quit"
+    echo "6) Back to main menu"
 }
 
-setup_global_access() {
+show_post_refactor_menu() {
+    echo "What would you like to do next?"
+    echo "1) Back to main menu"
+    echo "2) Select another refactoring tool"
+    echo "3) Quit"
+}
+
+setup_global_script_access() {
     mkdir -p "$BIN_DIR"
     if [ -f "$SCRIPT_PATH" ]; then
         rm -f "$SCRIPT_PATH"
@@ -117,98 +178,116 @@ setup_global_access() {
         source ~/"$shell_rc"
     fi
 
-    log "${GREEN}Script has been copied to ~/bin and made executable globally.${NC}"
-    log "${GREEN}You can now run the script from anywhere using '$SCRIPT_NAME'.${NC}"
+    log_message "${GREEN}Script has been copied to ~/bin and made executable globally.${NC}"
+    log_message "${GREEN}You can now run the script from anywhere using '$SCRIPT_NAME'.${NC}"
 }
 
-check_global_access() {
+check_and_setup_global_access() {
     if [[ "$0" != "$SCRIPT_PATH" ]]; then
-        log "${YELLOW}The script is not in the global executable location.${NC}"
+        log_message "${YELLOW}The script is not in the global executable location.${NC}"
         read -p "Do you want to set up this script for global access? (y/n): " setup_choice
         setup_choice=$(echo "$setup_choice" | tr '[:upper:]' '[:lower:]')
         case "$setup_choice" in
         y | yes)
-            setup_global_access
-            log "${GREEN}Please re-run the script using '$SCRIPT_NAME' command.${NC}"
+            setup_global_script_access
+            log_message "${GREEN}Please re-run the script using '$SCRIPT_NAME' command.${NC}"
             exit 0
             ;;
         *)
-            log "${YELLOW}Global setup skipped. You can still move and make it executable manually later.${NC}"
+            log_message "${YELLOW}Global setup skipped. You can still move and make it executable manually later.${NC}"
             ;;
         esac
     else
-        log "${GREEN}The script is already in the global executable location.${NC}"
+        log_message "${GREEN}The script is already in the global executable location.${NC}"
     fi
 }
 
 main() {
-    check_global_access
-    install_dependencies
+    check_and_setup_global_access
+    ensure_dependencies_installed
 
     while true; do
-        menu
-        read -p "Enter your choice: " choice
-        case "$choice" in
-        1)
-            tool="rector"
-            config="$RECTOR_CONFIG"
-            ;;
-        2)
-            tool="ecs"
-            config="$ECS_CONFIG"
+        show_main_menu
+        read -p "Enter your choice: " main_choice
+        case "$main_choice" in
+        1 | 2)
+            while true; do
+                show_tool_selection_menu
+                read -p "Enter your choice: " tool_choice
+                case "$tool_choice" in
+                1)
+                    tool_name="rector"
+                    tool_config="$RECTOR_CONFIG"
+                    ;;
+                2)
+                    tool_name="ecs"
+                    tool_config="$ECS_CONFIG"
+                    ;;
+                3)
+                    tool_name="php-cs-fixer"
+                    tool_config="$PHPCS_FIXER_CONFIG"
+                    ;;
+                4)
+                    tool_name="pint"
+                    tool_config="$PINT_CONFIG"
+                    ;;
+                5)
+                    tool_name="apply_all"
+                    ;;
+                6)
+                    log_message "${YELLOW}Returning to the main menu.${NC}"
+                    break
+                    ;;
+                *)
+                    log_message "${RED}Invalid option. Please try again.${NC}"
+                    continue
+                    ;;
+                esac
+
+                if [[ "$tool_choice" -ge 1 && "$tool_choice" -le 5 ]]; then
+                    read -p "Enter the full path of the PHP file or directory to refactor (or type 'q' to quit): " path_input
+                    if [[ "$path_input" == "q" ]]; then
+                        log_message "${YELLOW}Quitting the script. Goodbye!${NC}"
+                        break 2
+                    fi
+
+                    validate_and_refactor "$path_input" "$tool_name" "$tool_config"
+
+                    read -p "Do you want to refactor another file or directory with the same tool? (y/N): " continue_choice
+                    if [[ "$continue_choice" != "y" && "$continue_choice" != "yes" ]]; then
+                        while true; do
+                            show_post_refactor_menu
+                            read -p "Enter your choice: " post_refactor_choice
+                            case "$post_refactor_choice" in
+                            1)
+                                log_message "${YELLOW}Returning to the main menu.${NC}"
+                                break 2
+                                ;;
+                            2)
+                                log_message "${YELLOW}Selecting another refactoring tool.${NC}"
+                                break
+                                ;;
+                            3)
+                                log_message "${YELLOW}Quitting the script. Goodbye!${NC}"
+                                exit 0
+                                ;;
+                            *)
+                                log_message "${RED}Invalid option. Please try again.${NC}"
+                                ;;
+                            esac
+                        done
+                    fi
+                fi
+            done
             ;;
         3)
-            tool="php-cs-fixer"
-            config="$PHPCS_FIXER_CONFIG"
-            ;;
-        4)
-            tool="pint"
-            config="$PINT_CONFIG"
-            ;;
-        5) tool="apply_all" ;;
-        6)
-            log "${YELLOW}Quitting the script. Goodbye!${NC}"
+            log_message "${YELLOW}Quitting the script. Goodbye!${NC}"
             exit 0
             ;;
         *)
-            log "${RED}Invalid option. Please try again.${NC}"
-            continue
+            log_message "${RED}Invalid option. Please try again.${NC}"
             ;;
         esac
-
-        if [[ "$tool" != "apply_all" ]]; then
-            # Verify if the selected tool is installed
-            if ! verify_installed "$tool"; then
-                log "${RED}Failed to find the tool: $tool. Please check the installation.${NC}"
-                continue
-            fi
-        fi
-
-        while true; do
-            read -p "Enter the full path of the PHP file to refactor (or type 'q' to quit): " file_path
-            file_path=$(echo "$file_path" | tr '[:upper:]' '[:lower:]')
-            if [[ "$file_path" == "q" ]]; then
-                log "${YELLOW}Quitting the script. Goodbye!${NC}"
-                break 2
-            fi
-
-            if [[ -f "$file_path" && "${file_path##*.}" == "php" ]]; then
-                if [[ "$tool" == "apply_all" ]]; then
-                    apply_all_tools "$file_path"
-                else
-                    refactor_with_tool "$tool" "$config" "$file_path"
-                fi
-            else
-                log "${RED}Invalid file path or file is not a PHP file. Please provide a valid PHP file path.${NC}"
-            fi
-
-            read -p "Do you want to refactor another file? (N/y): " continue_choice
-            continue_choice=$(echo "$continue_choice" | tr '[:upper:]' '[:lower:]')
-            continue_choice=${continue_choice:-n}
-            if [[ "$continue_choice" != "y" && "$continue_choice" != "yes" ]]; then
-                break
-            fi
-        done
     done
 }
 
